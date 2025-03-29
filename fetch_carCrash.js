@@ -52,8 +52,7 @@ async function getCrashDetails(crashList) {
             }
             
             const detailData = await response.json();
-            detailsArray.push(detailData['Results'][0]);
-        
+            
             try {
                 const crashData = detailData.Results[0][0].CrashResultSet;
                 locationsArray.push({
@@ -61,6 +60,7 @@ async function getCrashDetails(crashList) {
                     longitude: crashData.LONGITUD,
                     city: crashData.CITYNAME
                 });
+                detailsArray.push(detailData['Results'][0]);
             } catch (locationError) {
                 console.error(`[FAIL] Error extracting location data for case ${crash.CaseNumber}:`, locationError);
             }
@@ -101,6 +101,7 @@ async function processAllCrashData() {
         console.log(`[PASS] Total crashes processed: ${crashes.length}`);
         console.log(`[PASS] Details obtained: ${result.details.length}`);
         console.log(`[PASS] Locations mapped: ${result.locations.length}`);
+        console.log(`[INFO] Both arrays have ${result.locations.length === result.details.length ? 'matching' : 'different'} sizes`);
         
         return result; // return an object with locations array and details array
     } catch (error) {
