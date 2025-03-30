@@ -3,6 +3,7 @@ const axios = require('axios');
 const { Client } = require('pg');
 const fs = require('fs');
 
+
 // Database connection setup
 const db = new Client({
     user: process.env.DB_USER,
@@ -17,98 +18,134 @@ db.connect()
     .then(() => console.log("Connected to the database"))
     .catch(err => console.error("Connection error", err.stack));
 
-const API_KEY = process.env.API_KEY;
 
-// Locations
-const jsonData = JSON.parse(fs.readFileSync('us_cities.json', 'utf8'));
-const locations = jsonData.map(city => ({
-    lat: city.city.coord.lat,
-    lon: city.city.coord.lon,
-    city: city.city.name
-}));
-
-console.log(`Loaded ${locations.length} locations.`);
-
+// Hardcoded locations while waiting for real locations
+const locations = [
+   { lat: 38.732891, lon: -77.058029},
+   { lat: 33.401779, lon: -86.954437}
+]
 
 // Fetch weather data for the specified location
-const fetchWeather = async (lat, lon, city, startTime, endTime) => {
+const fetchWeather = async (lat, lon) => {
     try {
-        const url = `https://history.openweathermap.org/data/2.5/history/city?lat=${lat}&lon=${lon}&type=hour&start=${startTime}&end=${endTime}&appid=${API_KEY}`;
-    
+        const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=2022-01-01&end_date=2022-12-31&hourly=temperature_2m,relative_humidity_2m,dew_point_2m,apparent_temperature,precipitation,rain,snowfall,snow_depth,weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m,wind_speed_100m,wind_direction_10m,wind_direction_100m,wind_gusts_10m`;
         console.log(`Fetching data from: ${url}`);
 
         const response = await axios.get(url);
         const data = response.data;
 
-        const hourlyData = data.list.map((hourlyRecord) => {
-            // Get the weather object (first element in the "weather" array)
-            const weather = hourlyRecord.weather[0];
+        const codeToDescription = {
+            "0" : "Clear",
+            "1" : "Mostly clear",
+            "2" : "Partly cloudy",
+            "3" : "Overcast", 
+            "45" : "Fog",
+            "48" : "Icy fog",
+            "51" : "Light drizzle",
+            "53" : "Drizzle", 
+            "55" : "Heavy drizzle",
+            "80" : "Light showers",
+            "81" : "Showers",
+            "82" : "Heavy showers", 
+            "61" : "Light rain",
+            "63" : "Rain",
+            "65" : "Heavy rain",
+            "56" : "Light freezing drizzle", 
+            "57" : "Freezing drizzle",
+            "66" : "Light freezing rain",
+            "67" : "Freezing rain",
+            "77" : "Snow grains", 
+            "85" : "Light snow showers",
+            "86" : "Snow showers",
+            "71" : "Light snow",
+            "73" : "Snow", 
+            "75" : "Heavy snow",
+            "95" : "Thunderstorm",
+            "96" : "Light T-storm with hail",
+            "99" : "T-storm with hail"           
+        }
+        // Check if hourly data exists
+        if (data.hourly && data.hourly.time && data.hourly.time.length > 0) {
 
-            return {
-                lat: lat, 
-                lon: lon,
-                city: city,
-                timestamp: hourlyRecord.dt,  
-                temp: hourlyRecord.main.temp,
-                feels_like: hourlyRecord.main.feels_like,
-                pressure: hourlyRecord.main.pressure,
-                humidity: hourlyRecord.main.humidity,
-                temp_min: hourlyRecord.main.temp_min,
-                temp_max: hourlyRecord.main.temp_max,
-                wind_speed: hourlyRecord.wind.speed,
-                wind_direction: hourlyRecord.wind.deg,
-                cloudiness: hourlyRecord.clouds.all,
-                main: weather.main,
-                description: weather.description,
-                weather_id: weather.id,  
-                rain_1h: hourlyRecord.rain ? hourlyRecord.rain['1h'] || 0 : 0,
-                rain_3h: hourlyRecord.rain ? hourlyRecord.rain['3h'] || 0 : 0,
-                snow_1h: hourlyRecord.snow ? hourlyRecord.snow['1h'] || 0 : 0,
-                snow_3h: hourlyRecord.snow ? hourlyRecord.snow['3h'] || 0 : 0,
-            };
-        });
+            const hourlyData = data.hourly.time.map((time, index) => {
+                const unixTimestamp = Math.floor(new Date(time).getTime() / 1000); 
 
-        return hourlyData;
-    
+                return {
+                    lat: lat,
+                    lon: lon,
+                    timestamp: time, 
+                    unixTimestamp: unixTimestamp, 
+                    temperature: data.hourly.temperature_2m[index],
+                    humidity: data.hourly.relative_humidity_2m[index],
+                    dewPoint: data.hourly.dew_point_2m[index],
+                    apparentTemperature: data.hourly.apparent_temperature[index],
+                    precipitation: data.hourly.precipitation[index],
+                    rain: data.hourly.rain[index],
+                    snowfall: data.hourly.snowfall[index],
+                    snowDepth: data.hourly.snow_depth[index],
+                    weatherDescription: codeToDescription[data.hourly.weather_code[index]],
+                    cloudCover: data.hourly.cloud_cover[index],
+                    cloudCoverLow: data.hourly.cloud_cover_low[index],
+                    cloudCoverMid: data.hourly.cloud_cover_mid[index],
+                    cloudCoverHigh: data.hourly.cloud_cover_high[index],
+                    windSpeed10m: data.hourly.wind_speed_10m[index],
+                    windSpeed100m: data.hourly.wind_speed_100m[index],
+                    windDirection10m: data.hourly.wind_direction_10m[index],
+                    windDirection100m: data.hourly.wind_direction_100m[index],
+                    windGusts10m: data.hourly.wind_gusts_10m[index]
+                };
+            });
+
+            return hourlyData;
+        } else {
+            console.error(`No hourly data found for ${city}`);
+            return null;
+        }
+
     } catch (error) {
         console.error(`Failed to fetch weather data for (${lat}, ${lon}):`, error.message);
         return null;
     }
 };
 
+
 // Insert weather data into the database
 const insertWeatherData = async (weatherData) => {
     try {
         const query = `
                     INSERT INTO weather_history (
-                        lat, long, city, weather_id, timestamp, temp, feels_like, pressure, humidity, temp_min, temp_max, 
-                        wind_speed, wind_direction, cloudiness, main, description, rain_1h, rain_3h, snow_1h, snow_3h
+                        lat, long, time, unix_timestamp, weather_description, temperature, relative_humidity, dew_point, apparent_temperature, 
+                        precipitation, rain, snowfall, snow_depth, cloud_cover, cloud_cover_low, cloud_cover_mid, 
+                        cloud_cover_high, wind_speed_10m, wind_speed_100m, wind_direction_10m, wind_direction_100m, 
+                        wind_gusts_10m
                     ) 
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
                 `;
 
         for (const record of weatherData) {
             const values = [
                 record.lat, 
                 record.lon,
-                record.city,
-                record.weather_id,  
                 record.timestamp,
-                record.temp,
-                record.feels_like,
-                record.pressure,
+                record.unixTimestamp,
+                record.weatherDescription,  
+                record.temperature,
                 record.humidity,
-                record.temp_min,
-                record.temp_max,
-                record.wind_speed,
-                record.wind_direction,
-                record.cloudiness,
-                record.main,
-                record.description,
-                record.rain_1h,
-                record.rain_3h,
-                record.snow_1h,
-                record.snow_3h
+                record.dewPoint,
+                record.apparentTemperature,
+                record.precipitation,
+                record.rain,
+                record.snowfall,
+                record.snowDepth,
+                record.cloudCover,
+                record.cloudCoverLow,
+                record.cloudCoverMid,
+                record.cloudCoverHigh,
+                record.windSpeed10m,
+                record.windSpeed100m,
+                record.windDirection10m,
+                record.windDirection100m,
+                record.windGusts10m
             ];
 
             await db.query(query, values);
@@ -120,25 +157,18 @@ const insertWeatherData = async (weatherData) => {
     }
 };
 
+
 // Fetch and insert weather data for all locations
 const fetchAndInsertWeatherData = async () => {
-    const currentTime = Math.floor(Date.now() / 1000);  // current timestamp in seconds
-    const oneYearAgo = currentTime - (365.25 * 24 * 60 * 60); // 2 years ago in Unix timestamp
-
     for (const location of locations) {
-        const { lat, lon, city } = location;
-        let startTime = oneYearAgo;
+        const { lat, lon } = location;
         
-        // Loop over the time range, requesting one week of data at a time
-        while (startTime < currentTime) {
-            const endTime = Math.min(startTime + (7 * 24 * 60 * 60), currentTime);  // 7 days later, but not beyond current time
-            const weatherData = await fetchWeather(lat, lon, city, startTime, endTime);
+        // Fetch weather data for the entire available range (from API)
+        const weatherData = await fetchWeather(lat, lon);
 
-            if (weatherData) {
-                await insertWeatherData(weatherData);
-            }
-
-            startTime = endTime;  // Move the start time to the end time for the next week
+        if (weatherData) {
+            // Insert the fetched weather data into the database
+            await insertWeatherData(weatherData);
         }
     }
 
@@ -146,5 +176,6 @@ const fetchAndInsertWeatherData = async () => {
     db.end();
 };
 
-// Start the process
-fetchAndInsertWeatherData();
+
+fetchAndInsertWeatherData(); 
+
