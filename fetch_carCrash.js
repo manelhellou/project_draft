@@ -110,4 +110,7 @@ async function processAllCrashData() {
     }
 }
 
-const crashDataResult = processAllCrashData();
+// This is to make sure that the file only runs when we directly run it, but not when it is imported into fetch_weather.js
+if (import.meta.url === `file://${process.argv[1]}`) {
+    const crashDataResult = processAllCrashData();
+}
