@@ -18,13 +18,6 @@ db.connect()
     .then(() => console.log("Connected to the database"))
     .catch(err => console.error("Connection error", err.stack));
 
-
-// Hardcoded locations while waiting for real locations
-const locations = [
-   { lat: 38.732891, lon: -77.058029},
-   { lat: 33.401779, lon: -86.954437}
-]
-
 // Fetch weather data for the specified location
 const fetchWeather = async (lat, lon) => {
     try {
@@ -159,15 +152,13 @@ const insertWeatherData = async (weatherData) => {
 
 
 // Fetch and insert weather data for all locations
-const fetchAndInsertWeatherData = async () => {
+const fetchAndInsertWeatherData = async (locations) => {
     for (const location of locations) {
-        const { lat, lon } = location;
+        const { latitude: lat, longitude: lon } = location;
         
-        // Fetch weather data for the entire available range (from API)
         const weatherData = await fetchWeather(lat, lon);
 
         if (weatherData) {
-            // Insert the fetched weather data into the database
             await insertWeatherData(weatherData);
         }
     }
@@ -176,6 +167,28 @@ const fetchAndInsertWeatherData = async () => {
     db.end();
 };
 
+async function main() {
+    const carCrashFile = await import("./fetch_carCrash.mjs");
+    const crashInfo = await carCrashFile.processAllCrashData();
 
-fetchAndInsertWeatherData(); 
+    //API has a maximum of calls per hour, so we will separate it in 2 
+    const half = Math.floor(crashInfo.locations.length / 2); 
 
+    //Arguments to pass in command line
+    const processFirstHalf = process.argv.includes("--first");
+    const processSecondHalf = process.argv.includes("--second");
+
+    let locations;
+    if (processFirstHalf) {
+        locations = crashInfo.locations.slice(0, half);
+    } else if (processSecondHalf) {
+        locations = crashInfo.locations.slice(half);
+    } else {
+        console.log("Please specify --first or --second");
+        return;
+    }
+
+    fetchAndInsertWeatherData(locations);
+}
+
+main();
