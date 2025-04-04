@@ -1,6 +1,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 function getRandomNameByDate(date, sex) {
     try {
@@ -40,15 +41,20 @@ function getRandomSurname(){
 
         const surnames = fileContent.split('\n');
 
-        return surnames[Math.floor(Math.random() * surnames.length)].slice(0,-2);
+        return surnames[Math.floor(Math.random() * 1000)].slice(0,-2);
     }
     catch (error){
         console.error(`Error: ${error.message}`);
         return null;
     }
-
-
 }
+
+function getSSN(name, surname) {
+        const hash = crypto.createHash('sha256').update(name + surname + Math.floor(Math.random() * 100)).digest('hex');
+        const digitsOnly = hash.replace(/\D/g, ''); // Remove non-digits
+        return digitsOnly.slice(0, 12); // Optional: trim to a certain length
+}
+
 
 
 
