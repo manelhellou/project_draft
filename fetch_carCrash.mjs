@@ -61,6 +61,7 @@ async function getCrashDetails(crashList) {
     const locationsArray = [];
     let processedCount = 0;
     const totalCrashes = crashList.length;
+    const BATCH_SIZE = 10;
     
     for (const crash of crashList) {
         const url = `https://crashviewer.nhtsa.dot.gov/CrashAPI/crashes/GetCaseDetails?stateCase=${crash.CaseNumber}&caseYear=${crash.CaseYear}&state=${crash.StateNumber}&format=json`;
@@ -91,7 +92,17 @@ async function getCrashDetails(crashList) {
         }
         
         processedCount++;
-        if (processedCount % 100 === 0 || processedCount === totalCrashes) {
+        
+        if (processedCount % BATCH_SIZE === 0 || processedCount === totalCrashes) {
+            const batchStart = Math.max(0, processedCount - BATCH_SIZE);
+            const batchEnd = processedCount;
+            
+            const batchData = {
+                locations: locationsArray.slice(batchStart, batchEnd),
+                details: detailsArray.slice(batchStart, batchEnd)
+            };
+            
+            await saveLocationData(batchData);
             console.log(`[PROGRESS] ${processedCount}/${totalCrashes} crashes processed (${Math.round(processedCount/totalCrashes*100)}%)`);
         }
     }
@@ -169,8 +180,6 @@ export async function processAllCrashData() {
         console.log(`[PASS] Details obtained: ${result.details.length}`);
         console.log(`[PASS] Locations mapped: ${result.locations.length}`);
         console.log(`[PASS] Both arrays have ${result.locations.length === result.details.length ? 'matching' : 'different'} sizes`);
-        
-        await saveLocationData(result);
         
         await db.end();
         console.log('[PASS] Database connection closed');
