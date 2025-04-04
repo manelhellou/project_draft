@@ -104,6 +104,7 @@ async function getCrashDetails(crashList) {
             
             await saveLocationData(batchData);
             await saveAccidentData(batchData);
+            // await saveVehicleData(batchData);
             console.log(`[PROGRESS] ${processedCount}/${totalCrashes} crashes processed (${Math.round(processedCount/totalCrashes*100)}%)`);
         }
     }
@@ -202,6 +203,45 @@ async function saveAccidentData(crashData) {
     } catch (error) {
         await db.query('ROLLBACK');
         console.error('[FAIL] Error saving accident data:', error);
+        throw error;
+    }
+}
+
+async function saveVehicleData(crashData) {
+    try {
+        await db.query('BEGIN');
+
+        for (let i = 0; i < crashData.details.length; i++) {
+            const crashDetail = crashData.details[i][0].CrashResultSet;
+            
+            const query = `
+                INSERT INTO vehicle (
+                    vin,
+                    maker,
+                    model,
+                    type,
+                    model_year
+                ) VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (vin) DO NOTHING
+            `;
+
+            const modelYear = crashDetail.MOD_YEAR ? (parseInt(crashDetail.MOD_YEAR) || null) : null;
+
+            const values = [
+                crashDetail.VIN,
+                crashDetail.MAKENAME,
+                crashDetail.MODELNAME,
+                crashDetail.BODYSTYL_T,
+                modelYear
+            ];
+
+            await db.query(query, values);
+        }
+
+        await db.query('COMMIT');
+    } catch (error) {
+        await db.query('ROLLBACK');
+        console.error('[FAIL] Error saving vehicle data:', error);
         throw error;
     }
 }
