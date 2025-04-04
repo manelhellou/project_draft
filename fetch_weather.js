@@ -111,7 +111,7 @@ const fetchWeather = async (lat, lon) => {
 const insertWeatherData = async (weatherData) => {
     try {
         const query = `
-                    INSERT INTO weather_history (
+                    INSERT INTO weather (
                         lat, long, time, unix_timestamp, weather_description, temperature, relative_humidity, dew_point, apparent_temperature, 
                         precipitation, rain, snowfall, snow_depth, cloud_cover, cloud_cover_low, cloud_cover_mid, 
                         cloud_cover_high, wind_speed_10m, wind_speed_100m, wind_direction_10m, wind_direction_100m, 
