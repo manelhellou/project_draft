@@ -11,6 +11,11 @@ const db = new Client({
     host: process.env.DB_HOST,
     port: process.env.DB_PORT,
     database: process.env.DB_NAME,
+    ssl: {
+        require: true,
+        rejectUnauthorized: true,
+        ca: fs.readFileSync('us-east-2-bundle.pem').toString(),
+    }
 });
 
 // Connect to the database

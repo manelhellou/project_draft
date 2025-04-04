@@ -83,7 +83,7 @@ async function getCrashDetails(crashList) {
     };
 }
 
-async function processAllCrashData() {
+export async function processAllCrashData() {
     try {
         const crashes = await getCrashList();
         
