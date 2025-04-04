@@ -98,6 +98,47 @@ async function getCrashDetails(crashList) {
     };
 }
 
+async function saveLocationData(crashData) {
+    try {
+        await db.query('BEGIN');
+
+        for (let i = 0; i < crashData.locations.length; i++) {
+            const location = crashData.locations[i];
+            const crashDetail = crashData.details[i][0].CrashResultSet;
+            
+            const query = `
+                INSERT INTO location (
+                    lat,
+                    lon,
+                    state,
+                    city,
+                    route,
+                    route_name
+                ) VALUES ($1, $2, $3, $4, $5, $6)
+                ON CONFLICT (lat, lon) DO NOTHING
+            `;
+
+            const values = [
+                parseFloat(location.latitude),
+                parseFloat(location.longitude),
+                crashDetail.STATENAME || null,
+                location.city || null,
+                parseInt(crashDetail.ROUTE) || null,
+                crashDetail.TWAY_ID || crashDetail.ROUTE_NAME || null
+            ];
+
+            await db.query(query, values);
+        }
+
+        await db.query('COMMIT');
+        console.log('[PASS] Successfully saved location data to database');
+    } catch (error) {
+        await db.query('ROLLBACK');
+        console.error('[FAIL] Error saving location data:', error);
+        throw error;
+    }
+}
+
 export async function processAllCrashData() {
     try {
         const crashes = await getCrashList();
@@ -106,6 +147,11 @@ export async function processAllCrashData() {
             console.log("[FAIL] No crashes found. Exiting process.");
             return { locations: [], details: [] };
         }
+        
+        // Testing block - uncomment to process only first 10 crashes
+        crashes.length = Math.min(crashes.length, 10);
+        console.log(`[TEST] Processing limited to first ${crashes.length} crashes`);
+        // End of testing block
         
         console.log(`[INFO] Processing all ${crashes.length} crashes...`);
         
@@ -118,7 +164,7 @@ export async function processAllCrashData() {
         console.log(`[PASS] Locations mapped: ${result.locations.length}`);
         console.log(`[INFO] Both arrays have ${result.locations.length === result.details.length ? 'matching' : 'different'} sizes`);
         
-        await saveAccidentData(result);
+        await saveLocationData(result);
         
         return result; // return an object with locations array and details array
     } catch (error) {
