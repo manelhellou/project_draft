@@ -5,7 +5,7 @@ const crypto = require('crypto');
 
 function getRandomNameByDate(date, sex) {
     try {
-        const year = date.split('-')[0].trim();
+        const year = date.getFullYear();
 
         const fileName = `yob${year}${sex}`;
         const filePath = path.join(__dirname,"/data/names/", fileName);
@@ -50,11 +50,35 @@ function getRandomSurname(){
 }
 
 function getSSN(name, surname) {
-        const hash = crypto.createHash('sha256').update(name + surname + Math.floor(Math.random() * 100)).digest('hex');
+        const hash = crypto.createHash('sha256').update(""+name + surname + Math.floor(Math.random() * 100)).digest('hex');
         const digitsOnly = hash.replace(/\D/g, ''); // Remove non-digits
         return digitsOnly.slice(0, 12); // Optional: trim to a certain length
 }
+function getRandomDate() {
+    const startDate = new Date(1925, 0, 1); // Jan 1, 1925
+    const endDate = new Date(2025, 0, 1);   // Jan 1, 2025
+    return new Date(startDate.getTime() + Math.random() * (endDate.getTime() - startDate.getTime()));
+}
 
 
+function getUser(){
+    dob = getRandomDate();
+    sex = Math.random() < 0.5 ? "F":"M";
+    name = getRandomNameByDate(dob, sex)
+    surname= getRandomSurname()
+    return [
+        name,
+        surname,
+        dob,
+        sex,
+        (Math.random() < 0.5),
+        (name+"."+surname+(Math.floor(Math.random()*100))+"@gmail.com"),
+        getSSN()
+
+    ]
+
+}
+
+console.log(getUser())
 
 
