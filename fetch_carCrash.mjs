@@ -1,3 +1,18 @@
+import pg from 'pg';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const db = new pg.Client({
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT,
+    database: process.env.DB_NAME,
+});
+
+await db.connect();
+
 async function getCrashList() {
     const url = "https://crashviewer.nhtsa.dot.gov/CrashAPI/crashes/GetCaseList?states=1,51&fromYear=2014&toYear=2015&minNumOfVehicles=1&maxNumOfVehicles=6&format=json";
     
@@ -102,6 +117,8 @@ export async function processAllCrashData() {
         console.log(`[PASS] Details obtained: ${result.details.length}`);
         console.log(`[PASS] Locations mapped: ${result.locations.length}`);
         console.log(`[INFO] Both arrays have ${result.locations.length === result.details.length ? 'matching' : 'different'} sizes`);
+        
+        await saveAccidentData(result);
         
         return result; // return an object with locations array and details array
     } catch (error) {
