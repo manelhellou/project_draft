@@ -2,7 +2,7 @@ import pg from 'pg';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
-
+import {getVictim, getInjury} from './generator_function.js'
 dotenv.config();
 
 const db = new pg.Client({
@@ -207,35 +207,84 @@ async function saveAccidentData(crashData) {
     }
 }
 
+async function savePersonVehicle(victim_id,VIN, driving){
+    const query = `
+            INSERT INTO vehicle_victim (
+                victim_id,
+                VIN,
+                driving
+            ) VALUES ($1, $2, $3)
+            RETURNING victim_id
+        `;
+
+    const values = [
+        victim_id,
+        VIN,
+        driving
+    ];
+
+}
+
+
+async function savePersonData(VIN, passengernum){
+
+    for (let i = 0; i < passengernum; i++) {
+        const query = `
+            INSERT INTO victim (
+                first_name,
+                last_name,
+                date_of_birth,
+                sex,
+                health_insurance,
+                contact_inf,
+                ssn
+            ) VALUES ($1, $2, $3, $4, $5,$6,$7)
+            RETURNING victim_id
+        `;
+
+        const result = await query(query, getVictim())
+        const driving = (i === 0);
+        savePersonVehicle(result.rows[0].victim_id,VIN, driving);
+
+    }
+
+}
+
 async function saveVehicleData(crashData) {
     try {
         await db.query('BEGIN');
 
         for (let i = 0; i < crashData.details.length; i++) {
             const crashDetail = crashData.details[i][0].CrashResultSet;
-            
-            const query = `
-                INSERT INTO vehicle (
-                    vin,
-                    maker,
-                    model,
-                    type,
-                    model_year
-                ) VALUES ($1, $2, $3, $4, $5)
-                ON CONFLICT (vin) DO NOTHING
-            `;
 
-            const modelYear = crashDetail.MOD_YEAR ? (parseInt(crashDetail.MOD_YEAR) || null) : null;
+            for (let j = 0; j < crashDetail.Vehicles.length; j++) {
+                const vehicle = crashDetail.Vehicles[j];
 
-            const values = [
-                crashDetail.VIN,
-                crashDetail.MAKENAME,
-                crashDetail.MODELNAME,
-                crashDetail.BODYSTYL_T,
-                modelYear
-            ];
+                const query = `
+                    INSERT INTO vehicle (
+                        vin,
+                        maker,
+                        model,
+                        type,
+                        model_year
+                    ) VALUES ($1, $2, $3, $4, $5)
+                    ON CONFLICT (vin) DO NOTHING
+                `;
 
-            await db.query(query, values);
+                const modelYear = crashDetail.MOD_YEAR ? (parseInt(crashDetail.MOD_YEAR) || null) : null;
+
+                const values = [
+                    vehicle.VIN,
+                    vehicle.MAKENAME,
+                    vehicle.MODELNAME,
+                    vehicle.BODYSTYL_T,
+                    modelYear
+                ];
+
+                await db.query(query, values);
+                if (vehicle.Persons.length>0)
+                    savePersonData(vehicle.VIN, vehicle.Persons.length);
+            }
         }
 
         await db.query('COMMIT');
@@ -254,16 +303,16 @@ export async function processAllCrashData() {
             console.log("[FAIL] No crashes found. Exiting process.");
             return { locations: [], details: [] };
         }
-        
+
         // Testing block - uncomment to process only first 10 crashes
         // crashes.length = Math.min(crashes.length, 10);
         // console.log(`[TEST] Processing limited to first ${crashes.length} crashes`);
         // End of testing block
-        
+
         console.log(`[INFO] Processing all ${crashes.length} crashes...`);
-        
+
         const result = await getCrashDetails(crashes);
-        
+
         console.log("\nSummary Report");
         console.log("------------------");
         console.log(`[PASS] Total crashes processed: ${crashes.length}`);
@@ -284,6 +333,6 @@ export async function processAllCrashData() {
 }
 
 // This is to make sure that the file only runs when we directly run it, but not when it is imported into fetch_weather.js
-if (import.meta.url === `file://${process.argv[1]}`) {
-    const crashDataResult = processAllCrashData();
-}
+
+const crashDataResult = processAllCrashData();
+

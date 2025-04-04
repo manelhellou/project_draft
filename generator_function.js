@@ -59,13 +59,26 @@ function getRandomDate() {
     const endDate = new Date(2025, 0, 1);   // Jan 1, 2025
     return new Date(startDate.getTime() + Math.random() * (endDate.getTime() - startDate.getTime()));
 }
+export function getInjury() {
+    try{
+        const filePath = path.join(__dirname,"/data/car_accident_injuries.txt");
+        const fileContent = fs.readFileSync(filePath, 'utf8');
 
+        const surnames = fileContent.split('\n');
 
-function getUser(){
-    dob = getRandomDate();
-    sex = Math.random() < 0.5 ? "F":"M";
-    name = getRandomNameByDate(dob, sex)
-    surname= getRandomSurname()
+        return surnames[Math.floor(Math.random() * 137)];
+    }
+    catch (error){
+        console.error(`Error: ${error.message}`);
+        return null;
+    }
+}
+
+export function getVictim(){
+    const dob = getRandomDate();
+     const sex = Math.random() < 0.5 ? "F":"M";
+     const name = getRandomNameByDate(dob, sex)
+     const surname= getRandomSurname()
     return [
         name,
         surname,
@@ -76,9 +89,41 @@ function getUser(){
         getSSN()
 
     ]
-
 }
 
-console.log(getUser())
+function getRespondent(county){
+    const dob = getRandomDate();
+    const sex = Math.random() < 0.5 ? "F":"M";
+    const name = getRandomNameByDate(dob, sex)
+    const surname= getRandomSurname()
+    const type = "";
+    switch (Math.floor(Math.random()*5)){
+        case 0:
+        case 1:
+            type="police";
+            break;
+        case 2:
+            type="fireman";
+            break;
+        case 3:
+        case 4:
+            type="paramedic";
+            break;
+    }
+
+
+    return [
+        name,
+        surname,
+        dob,
+        sex,
+        (Math.random() < 0.5),
+        (name+"."+surname+(Math.floor(Math.random()*100))+"@gmail.com"),
+        getSSN(),
+        type,
+
+
+    ]
+}
 
 
