@@ -22,7 +22,7 @@ db.connect()
     .catch(err => console.error("Connection error", err.stack));
 
 
-db.query(query)
+
 
 function hello(string) {
     console.log("hello")
