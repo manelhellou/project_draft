@@ -1,5 +1,7 @@
 import pg from 'pg';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
 
 dotenv.config();
 
@@ -9,6 +11,10 @@ const db = new pg.Client({
     host: process.env.DB_HOST,
     port: process.env.DB_PORT,
     database: process.env.DB_NAME,
+    ssl: {
+        rejectUnauthorized: true,
+        ca: fs.readFileSync(path.join(process.cwd(), 'us-east-2-bundle.pem')).toString()
+    }
 });
 
 await db.connect();
@@ -124,7 +130,7 @@ async function saveLocationData(crashData) {
                 crashDetail.STATENAME || null,
                 location.city || null,
                 parseInt(crashDetail.ROUTE) || null,
-                crashDetail.TWAY_ID || crashDetail.ROUTE_NAME || null
+                crashDetail.ROUTE_NAME || crashDetail.TWAY_ID || null
             ];
 
             await db.query(query, values);
@@ -149,8 +155,8 @@ export async function processAllCrashData() {
         }
         
         // Testing block - uncomment to process only first 10 crashes
-        crashes.length = Math.min(crashes.length, 10);
-        console.log(`[TEST] Processing limited to first ${crashes.length} crashes`);
+        // crashes.length = Math.min(crashes.length, 10);
+        // console.log(`[TEST] Processing limited to first ${crashes.length} crashes`);
         // End of testing block
         
         console.log(`[INFO] Processing all ${crashes.length} crashes...`);
@@ -162,13 +168,18 @@ export async function processAllCrashData() {
         console.log(`[PASS] Total crashes processed: ${crashes.length}`);
         console.log(`[PASS] Details obtained: ${result.details.length}`);
         console.log(`[PASS] Locations mapped: ${result.locations.length}`);
-        console.log(`[INFO] Both arrays have ${result.locations.length === result.details.length ? 'matching' : 'different'} sizes`);
+        console.log(`[PASS] Both arrays have ${result.locations.length === result.details.length ? 'matching' : 'different'} sizes`);
         
         await saveLocationData(result);
         
-        return result; // return an object with locations array and details array
+        await db.end();
+        console.log('[PASS] Database connection closed');
+        
+        return result;// return an object with locations array and details array
     } catch (error) {
         console.error("[FAIL] Error in processing crash data:", error);
+        await db.end();
+        console.log('[INFO] Database connection closed after error');
         return { locations: [], details: [] };
     }
 }
