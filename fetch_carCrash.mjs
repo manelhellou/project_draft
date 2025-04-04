@@ -103,6 +103,7 @@ async function getCrashDetails(crashList) {
             };
             
             await saveLocationData(batchData);
+            await saveAccidentData(batchData);
             console.log(`[PROGRESS] ${processedCount}/${totalCrashes} crashes processed (${Math.round(processedCount/totalCrashes*100)}%)`);
         }
     }
@@ -130,8 +131,9 @@ async function saveLocationData(crashData) {
                     state,
                     city,
                     route,
-                    route_name
-                ) VALUES ($1, $2, $3, $4, $5, $6)
+                    route_name,
+                    county
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7)
                 ON CONFLICT (lat, lon) DO NOTHING
             `;
 
@@ -141,17 +143,65 @@ async function saveLocationData(crashData) {
                 crashDetail.STATENAME || null,
                 location.city || null,
                 parseInt(crashDetail.ROUTE) || null,
-                crashDetail.ROUTE_NAME || crashDetail.TWAY_ID || null
+                crashDetail.ROUTE_NAME || crashDetail.TWAY_ID || null,
+                crashDetail.COUNTYNAME || null
             ];
 
             await db.query(query, values);
         }
 
         await db.query('COMMIT');
-        console.log('[PASS] Successfully saved location data to database');
     } catch (error) {
         await db.query('ROLLBACK');
         console.error('[FAIL] Error saving location data:', error);
+        throw error;
+    }
+}
+
+async function saveAccidentData(crashData) {
+    try {
+        await db.query('BEGIN');
+
+        for (let i = 0; i < crashData.details.length; i++) {
+            const crashDetail = crashData.details[i][0].CrashResultSet;
+            const location = crashData.locations[i];
+            
+            const query = `
+                INSERT INTO accident (
+                    accident_id,  
+                    weather_id,
+                    state_case,
+                    time,
+                    evenement_name,
+                    lat,
+                    lon
+                ) VALUES (DEFAULT, $1, $2, $3, $4, $5, $6)
+            `;
+
+            const crashDate = new Date(
+                parseInt(crashDetail.CaseYear),
+                parseInt(crashDetail.MONTH) - 1, 
+                parseInt(crashDetail.DAY),
+                parseInt(crashDetail.HOUR),
+                parseInt(crashDetail.MINUTE)
+            );
+
+            const values = [
+                null, 
+                parseInt(crashDetail.ST_CASE),
+                crashDate,
+                crashDetail.HARM_EVNAME || 'Unknown', 
+                parseFloat(location.latitude),
+                parseFloat(location.longitude)
+            ];
+
+            await db.query(query, values);
+        }
+
+        await db.query('COMMIT');
+    } catch (error) {
+        await db.query('ROLLBACK');
+        console.error('[FAIL] Error saving accident data:', error);
         throw error;
     }
 }
