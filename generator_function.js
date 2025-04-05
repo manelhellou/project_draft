@@ -94,7 +94,33 @@ export function getVictim(){
     ]
 }
 
-function getRespondent(county){
+function selectRandomCounties(filePath) {
+    try {
+        const fileContent = fs.readFileSync(__dirname, "/data/counties.txt");
+
+        const allCounties = fileContent.split('\n').filter(county => county.trim() !== '');
+
+        const numberOfCountiesToSelect = Math.floor(Math.random() * 5) + 1;
+
+        const selectedCounties = [];
+
+        for (let i = 0; i < numberOfCountiesToSelect; i++) {
+            if (allCounties.length === 0) break; // Stop if we've used all counties
+
+            const randomIndex = Math.floor(Math.random() * allCounties.length);
+            selectedCounties.push(allCounties[randomIndex]);
+
+            allCounties.splice(randomIndex, 1);
+        }
+
+        return selectedCounties;
+    } catch (error) {
+        console.error('Error reading counties file:', error.message);
+        return [];
+    }
+}
+
+export function getRespondent(){
     const dob = getRandomDate();
     const sex = Math.random() < 0.5 ? "F":"M";
     const name = getRandomNameByDate(dob, sex)
@@ -113,6 +139,7 @@ function getRespondent(county){
             type="paramedic";
             break;
     }
+    const counties = selectRandomCounties();
 
 
     return [
@@ -124,7 +151,7 @@ function getRespondent(county){
         (name+"."+surname+(Math.floor(Math.random()*100))+"@gmail.com"),
         getSSN(),
         type,
-
+        counties
 
     ]
 }

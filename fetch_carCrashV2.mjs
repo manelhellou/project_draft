@@ -2,7 +2,7 @@ import pg from 'pg';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
-import {getVictim, getInjury} from './generator_function.js'
+import {getVictim, getInjury, getRespondent} from './generator_function.js'
 dotenv.config();
 
 const db = new pg.Client({
@@ -129,6 +129,51 @@ async function saveVehicleAccident(VIN,accident_id){
 
 }
 
+async function saveRespondentData() {
+
+           const query = `
+    INSERT INTO emergency_respondent (
+        first_name,
+        last_name,
+        date_of_birth,
+        sex,
+        health_insurance,
+        contact_inf,
+        ssn,
+        type,
+        counties
+    ) VALUES ($1, $2, $3, $4, $5,$6,$7,$8,$9)
+    RETURNING respondent_id
+        `;
+
+
+    const result = await db.query(query, getRespondent);
+    return (result.rows[0].respondent_id);
+}
+
+async function saveIntervention(victim_id, accident_id, respondent_id) {
+    const query = `
+            INSERT INTO accident_victim (
+                victim_id,
+                accident_id,
+                respondent_id,
+                arrival_time,
+                 intervention_details
+            ) VALUES ($1, $2, $3,$4,$5)
+            RETURNING victim_id
+        `;
+    const values = [
+            victim_id,
+            accident_id,
+            respondent_id,
+            null,
+        null
+        ];
+    const result = await db.query(query, values);
+
+
+}
+
 async function savePersonAccident(victim_id, accident_id) {
     const query = `
             INSERT INTO accident_victim (
@@ -139,21 +184,25 @@ async function savePersonAccident(victim_id, accident_id) {
             ) VALUES ($1, $2, $3)
             RETURNING victim_id
         `;
-
+    let values;
     if (Math.random()>0.8){
-        const values = [
+         values = [
             victim_id,
             accident_id,
             false,
             null
         ];
-    }
-    const values = [
+    } else {
+        values = [
         victim_id,
         accident_id,
         true,
         getInjury()
-    ];
+    ];}
+    const result = await db.query(query, values);
+    const respondent_id = await saveRespondentData();
+    await saveIntervention(victim_id,accident_id,respondent_id);
+
 }
 
 async function savePersonData(VIN, passengernum, accident_id){
