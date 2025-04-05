@@ -1,13 +1,16 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const dir = dirname(fileURLToPath(import.meta.url));
 
 function getRandomNameByDate(date, sex) {
     try {
         const year = date.getFullYear();
 
         const fileName = `yob${year}${sex}`;
-        const filePath = path.join(__dirname,"/data/names/", fileName);
+        const filePath = path.join(dir,"/data/names/", fileName);
 
         if (!fs.existsSync(filePath)) {
             throw new Error(`No name data found for year ${year}` + filePath);
@@ -35,7 +38,7 @@ function getRandomNameByDate(date, sex) {
 
 function getRandomSurname(){
     try{
-        const filePath = path.join(__dirname,"/data/surname.txt");
+        const filePath = path.join(dir,"/data/surname.txt");
         const fileContent = fs.readFileSync(filePath, 'utf8');
 
         const surnames = fileContent.split('\n');
@@ -55,12 +58,12 @@ function getSSN(name, surname) {
 }
 function getRandomDate() {
     const startDate = new Date(1925, 0, 1); // Jan 1, 1925
-    const endDate = new Date(2025, 0, 1);   // Jan 1, 2025
+    const endDate = new Date(2023, 12, 1);   // Jan 1, 2025
     return new Date(startDate.getTime() + Math.random() * (endDate.getTime() - startDate.getTime()));
 }
 export function getInjury(){
     try {
-        const filePath = path.join(__dirname, "/data/car_accident_injuries.txt");
+        const filePath = path.join(dir, "/data/car_accident_injuries.txt");
         const fileContent = fs.readFileSync(filePath, 'utf8');
 
         const injuryfile = fileContent.split('\n');
@@ -93,23 +96,22 @@ export function getVictim(){
     ]
 }
 
-function selectRandomCounties(filePath) {
+function selectRandomCounties(county) {
     try {
-        const fileContent = fs.readFileSync(__dirname, "/data/counties.txt");
-
-        const allCounties = fileContent.split('\n').filter(county => county.trim() !== '');
-
+        // const fileContent = fs.readFileSync(dir, "/data/counties.txt");
+        //
+        // const allCounties = fileContent.split('\n').filter(county => county.trim() !== '');
+        //
         const numberOfCountiesToSelect = Math.floor(Math.random() * 5) + 1;
 
-        const selectedCounties = [];
+        const selectedCounties = [county];
 
         for (let i = 0; i < numberOfCountiesToSelect; i++) {
-            if (allCounties.length === 0) break; // Stop if we've used all counties
 
-            const randomIndex = Math.floor(Math.random() * allCounties.length);
-            selectedCounties.push(allCounties[randomIndex]);
-
-            allCounties.splice(randomIndex, 1);
+            // const randomIndex = Math.floor(Math.random() * allCounties.length);
+            // selectedCounties.push(allCounties[randomIndex]);
+            selectedCounties.push( Math.floor(Math.random() *200))
+            //allCounties.splice(randomIndex, 1);
         }
 
         return selectedCounties;
@@ -119,7 +121,7 @@ function selectRandomCounties(filePath) {
     }
 }
 
-export function getRespondent(){
+export function getRespondent(county){
     const dob = getRandomDate();
     const sex = Math.random() < 0.5 ? "F":"M";
     const name = getRandomNameByDate(dob, sex)
@@ -138,7 +140,7 @@ export function getRespondent(){
             type="paramedic";
             break;
     }
-    const counties = selectRandomCounties();
+    const counties = selectRandomCounties(county);
 
 
     return [
@@ -146,7 +148,6 @@ export function getRespondent(){
         surname,
         dob,
         sex,
-        (Math.random() < 0.5),
         (name+"."+surname+(Math.floor(Math.random()*100))+"@gmail.com"),
         getSSN(),
         type,

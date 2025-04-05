@@ -4,6 +4,9 @@ import fs from 'fs';
 import path from 'path';
 import {getVictim, getInjury, getRespondent} from './generator_function.mjs'
 dotenv.config();
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const dir = dirname(fileURLToPath(import.meta.url));
 
 const db = new pg.Client({
     user: process.env.DB_USER,
@@ -108,13 +111,13 @@ async function savePersonVehicle(victim_id,VIN, driving){
         driving
     ];
 
-    await db.query(query, getVictim());
+    await db.query(query, values);
 }
 
 async function saveVehicleAccident(VIN,accident_id){
     const query = `
             INSERT INTO accident_vehicle (
-                vehicle_id,
+                accident_id,
                 VIN
             ) VALUES ($1, $2)
             
@@ -129,7 +132,7 @@ async function saveVehicleAccident(VIN,accident_id){
 
 }
 
-async function saveRespondentData() {
+async function saveRespondentData(county) {
 
            const query = `
     INSERT INTO emergency_respondent (
@@ -137,23 +140,22 @@ async function saveRespondentData() {
         last_name,
         date_of_birth,
         sex,
-        health_insurance,
-        contact_inf,
+        contact_info,
         ssn,
         type,
         counties
-    ) VALUES ($1, $2, $3, $4, $5,$6,$7,$8,$9)
+    ) VALUES ($1, $2, $3, $4, $5,$6,$7,$8)
     RETURNING respondent_id
         `;
 
 
-    const result = await db.query(query, getRespondent);
+    const result = await db.query(query, getRespondent(county));
     return (result.rows[0].respondent_id);
 }
 
 async function saveIntervention(victim_id, accident_id, respondent_id) {
     const query = `
-            INSERT INTO accident_victim (
+            INSERT INTO intervention (
                 victim_id,
                 accident_id,
                 respondent_id,
@@ -181,8 +183,7 @@ async function savePersonAccident(victim_id, accident_id) {
                 accident_id,
                 injured,
                 injury_desc
-            ) VALUES ($1, $2, $3)
-            RETURNING victim_id
+            ) VALUES ($1, $2, $3, $4)
         `;
     let values;
     if (Math.random()>0.8){
@@ -200,14 +201,10 @@ async function savePersonAccident(victim_id, accident_id) {
         getInjury()
     ];}
     const result = await db.query(query, values);
-    const respondent_id = await saveRespondentData();
-    await saveIntervention(victim_id,accident_id,respondent_id);
 
 }
 
-async function savePersonData(VIN, passengernum, accident_id){
-
-    for (let i = 0; i < passengernum; i++) {
+async function savePersonData(VIN, accident_id){
         const query = `
             INSERT INTO victim (
                 first_name,
@@ -215,22 +212,19 @@ async function savePersonData(VIN, passengernum, accident_id){
                 date_of_birth,
                 sex,
                 health_insurance,
-                contact_inf,
+                contact_info,
                 ssn
             ) VALUES ($1, $2, $3, $4, $5,$6,$7)
             RETURNING victim_id
         `;
 
         const result = await db.query(query, getVictim());
-        const driving = (i === 0);
-        await savePersonVehicle(result.rows[0].victim_id,VIN, driving);
-        await savePersonAccident(result.rows[0].victim_id,accident_id);
-
-    }
-
+        return result.rows[0].victim_id;
 }
 
+
 async function saveVehicleData(crashData, accident_id){
+    let vehicles = [];
     for (let j = 0; j < crashData.Vehicles.length; j++) {
         const vehicle = crashData.Vehicles[j];
 
@@ -256,11 +250,10 @@ async function saveVehicleData(crashData, accident_id){
         ];
 
         await db.query(query, values);
-        await saveVehicleAccident(vehicle.VIN, accident_id);
-        if (vehicle.Persons.length>0)
-            savePersonData(vehicle.VIN, vehicle.Persons.length, accident_id);
+        vehicles.push([vehicle.VIN, vehicle.Persons.length]);
 
     }
+    return vehicles;
 }
 
 async function saveLocationData(crashData) {
@@ -272,7 +265,7 @@ async function saveLocationData(crashData) {
                               route,
                               route_name,
                               county,
-                              county_name)
+                              county_num)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         ON CONFLICT (lat, lon) DO NOTHING
     `;
@@ -319,44 +312,12 @@ async function saveAccidentData(crashData) {
                 crashDate,
                 crashData.HARM_EVNAME || 'Unknown',
                 parseFloat(crashData.LATITUDE),
-                parseFloat(crashData.LONGITUDE).
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+                parseFloat(crashData.LONGITUDE)
             ];
 
-            saveLocationData(crashData);
 
             const result = await db.query(query, values);
-            saveVehicleData(crashData, result.rows[0].accident_id);
-
+            return result.rows[0].accident_id;
 }
 
 async function getCrashDetails(crashList) {
@@ -376,8 +337,24 @@ async function getCrashDetails(crashList) {
             const crashData= detailData.Results[0][0].CrashResultSet;
 
 
+            await saveLocationData(crashData);
+            const accident_id = await saveAccidentData(crashData);
+            const vehicles = await saveVehicleData(crashData, accident_id);
+            for (let i = 0; i < vehicles.length; i++) {
+                await saveVehicleAccident(vehicles[i][0], accident_id);
+                for (let j = 0; j < vehicles[i][1] ; j++) {
+                    const victim_id = await savePersonData(vehicles[i][0], accident_id);
+                    await savePersonVehicle(victim_id,vehicles[i][0], (j===0));
+                    await savePersonAccident(victim_id,accident_id);
 
-            saveAccidentData(crashData);
+                    const respondent_id = await saveRespondentData(crashData.COUNTY);
+                    await saveIntervention(victim_id,accident_id,respondent_id);
+                }
+
+            }
+
+
+
 
             await db.query('COMMIT');
         } catch (error) {
