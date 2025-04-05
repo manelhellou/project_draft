@@ -2,7 +2,7 @@ import pg from 'pg';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
-import {getVictim, getInjury} from './generator_function.mjs'
+// import {getVictim, getInjury} from './generator_function.js'
 dotenv.config();
 
 const db = new pg.Client({
@@ -56,12 +56,13 @@ async function getCrashList() {
     }
 }
 
+
+
 async function getCrashDetails(crashList) {
     const detailsArray = [];
     const locationsArray = [];
     let processedCount = 0;
     const totalCrashes = crashList.length;
-    const BATCH_SIZE = 10;
     
     for (const crash of crashList) {
         const url = `https://crashviewer.nhtsa.dot.gov/CrashAPI/crashes/GetCaseDetails?stateCase=${crash.CaseNumber}&caseYear=${crash.CaseYear}&state=${crash.StateNumber}&format=json`;
@@ -76,13 +77,22 @@ async function getCrashDetails(crashList) {
             const detailData = await response.json();
             
             try {
+                // Access the crash data from the correct location in the response
                 const crashData = detailData.Results[0][0].CrashResultSet;
-                locationsArray.push({
+                const location = {
                     latitude: crashData.LATITUDE,
                     longitude: crashData.LONGITUD,
                     city: crashData.CITYNAME
+                };
+                
+                await saveAccidentData({
+                    location: location,
+                    detail: crashData
                 });
-                detailsArray.push(detailData['Results'][0]);
+                
+                locationsArray.push(location);
+                detailsArray.push(crashData);
+                
             } catch (locationError) {
                 console.error(`[FAIL] Error extracting location data for case ${crash.CaseNumber}:`, locationError);
             }
@@ -92,21 +102,7 @@ async function getCrashDetails(crashList) {
         }
         
         processedCount++;
-        
-        if (processedCount % BATCH_SIZE === 0 || processedCount === totalCrashes) {
-            const batchStart = Math.max(0, processedCount - BATCH_SIZE);
-            const batchEnd = processedCount;
-            
-            const batchData = {
-                locations: locationsArray.slice(batchStart, batchEnd),
-                details: detailsArray.slice(batchStart, batchEnd)
-            };
-            
-            await saveLocationData(batchData);
-            await saveAccidentData(batchData);
-            // await saveVehicleData(batchData);
-            console.log(`[PROGRESS] ${processedCount}/${totalCrashes} crashes processed (${Math.round(processedCount/totalCrashes*100)}%)`);
-        }
+        console.log(`[PROGRESS] ${processedCount}/${totalCrashes} crashes processed (${Math.round(processedCount/totalCrashes*100)}%)`);
     }
     
     console.log(`[PASS] Completed fetching ${detailsArray.length} crash details with ${locationsArray.length} location data points`);
@@ -117,182 +113,47 @@ async function getCrashDetails(crashList) {
     };
 }
 
-async function saveLocationData(crashData) {
-    try {
-        await db.query('BEGIN');
-
-        for (let i = 0; i < crashData.locations.length; i++) {
-            const location = crashData.locations[i];
-            const crashDetail = crashData.details[i][0].CrashResultSet;
-            
-            const query = `
-                INSERT INTO location (
-                    lat,
-                    lon,
-                    state,
-                    city,
-                    route,
-                    route_name,
-                    county,
-                    county_num
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                ON CONFLICT (lat, lon) DO NOTHING
-            `;
-
-            const values = [
-                parseFloat(location.latitude),
-                parseFloat(location.longitude),
-                crashDetail.STATENAME || null,
-                location.city || null,
-                parseInt(crashDetail.ROUTE) || null,
-                crashDetail.ROUTE_NAME || crashDetail.TWAY_ID || null,
-                crashDetail.COUNTYNAME || null,
-                crashDetail.COUNTY || null
-            ];
-
-            await db.query(query, values);
-        }
-
-        await db.query('COMMIT');
-    } catch (error) {
-        await db.query('ROLLBACK');
-        console.error('[FAIL] Error saving location data:', error);
-        throw error;
-    }
-}
-
 async function saveAccidentData(crashData) {
     try {
         await db.query('BEGIN');
 
-        for (let i = 0; i < crashData.details.length; i++) {
-            const crashDetail = crashData.details[i][0].CrashResultSet;
-            const location = crashData.locations[i];
-            
-            const query = `
-                INSERT INTO accident (
-                    accident_id,  
-                    weather_id,
-                    state_case,
-                    time,
-                    evenement_name,
-                    lat,
-                    lon
-                ) VALUES (DEFAULT, $1, $2, $3, $4, $5, $6)
-            `;
+        const detail = crashData.detail;
+        const location = crashData.location;
+        
+        const query = `
+            INSERT INTO accident (
+                accident_id,  
+                weather_id,
+                state_case,
+                time,
+                evenement_name,
+                lat,
+                lon
+            ) VALUES (DEFAULT, $1, $2, $3, $4, $5, $6)
+        `;
 
-            const crashDate = new Date(
-                parseInt(crashDetail.CaseYear),
-                parseInt(crashDetail.MONTH) - 1, 
-                parseInt(crashDetail.DAY),
-                parseInt(crashDetail.HOUR),
-                parseInt(crashDetail.MINUTE)
-            );
+        const crashDate = new Date(
+            parseInt(detail.CaseYear),
+            parseInt(detail.MONTH) - 1, 
+            parseInt(detail.DAY),
+            parseInt(detail.HOUR),
+            parseInt(detail.MINUTE)
+        );
 
-            const values = [
-                null, 
-                parseInt(crashDetail.ST_CASE),
-                crashDate,
-                crashDetail.HARM_EVNAME || 'Unknown', 
-                parseFloat(location.latitude),
-                parseFloat(location.longitude)
-            ];
+        const values = [
+            null, 
+            parseInt(detail.ST_CASE),
+            crashDate,
+            detail.HARM_EVNAME || 'Unknown', 
+            parseFloat(location.latitude),
+            parseFloat(location.longitude)
+        ];
 
-            await db.query(query, values);
-        }
-
+        await db.query(query, values);
         await db.query('COMMIT');
     } catch (error) {
         await db.query('ROLLBACK');
         console.error('[FAIL] Error saving accident data:', error);
-        throw error;
-    }
-}
-
-async function savePersonVehicle(victim_id,VIN, driving){
-    const query = `
-            INSERT INTO vehicle_victim (
-                victim_id,
-                VIN,
-                driving
-            ) VALUES ($1, $2, $3)
-            RETURNING victim_id
-        `;
-
-    const values = [
-        victim_id,
-        VIN,
-        driving
-    ];
-
-}
-
-
-async function savePersonData(VIN, passengernum){
-
-    for (let i = 0; i < passengernum; i++) {
-        const query = `
-            INSERT INTO victim (
-                first_name,
-                last_name,
-                date_of_birth,
-                sex,
-                health_insurance,
-                contact_inf,
-                ssn
-            ) VALUES ($1, $2, $3, $4, $5,$6,$7)
-            RETURNING victim_id
-        `;
-
-        const result = await query(query, getVictim())
-        const driving = (i === 0);
-        savePersonVehicle(result.rows[0].victim_id,VIN, driving);
-
-    }
-
-}
-
-async function saveVehicleData(crashData) {
-    try {
-        await db.query('BEGIN');
-
-        for (let i = 0; i < crashData.details.length; i++) {
-            const crashDetail = crashData.details[i][0].CrashResultSet;
-
-            for (let j = 0; j < crashDetail.Vehicles.length; j++) {
-                const vehicle = crashDetail.Vehicles[j];
-
-                const query = `
-                    INSERT INTO vehicle (
-                        vin,
-                        maker,
-                        model,
-                        type,
-                        model_year
-                    ) VALUES ($1, $2, $3, $4, $5)
-                    ON CONFLICT (vin) DO NOTHING
-                `;
-
-                const modelYear = crashDetail.MOD_YEAR ? (parseInt(crashDetail.MOD_YEAR) || null) : null;
-
-                const values = [
-                    vehicle.VIN,
-                    vehicle.MAKENAME,
-                    vehicle.MODELNAME,
-                    vehicle.BODYSTYL_T,
-                    modelYear
-                ];
-
-                await db.query(query, values);
-                if (vehicle.Persons.length>0)
-                    savePersonData(vehicle.VIN, vehicle.Persons.length);
-            }
-        }
-
-        await db.query('COMMIT');
-    } catch (error) {
-        await db.query('ROLLBACK');
-        console.error('[FAIL] Error saving vehicle data:', error);
         throw error;
     }
 }
@@ -335,6 +196,137 @@ export async function processAllCrashData() {
 }
 
 // This is to make sure that the file only runs when we directly run it, but not when it is imported into fetch_weather.js
+if (import.meta.url === `file://${process.argv[1]}`) {
+    const crashDataResult = processAllCrashData();
+}
 
-const crashDataResult = processAllCrashData();
 
+
+// async function saveLocationData(crashData) {
+//     try {
+//         await db.query('BEGIN');
+//
+//         for (let i = 0; i < crashData.locations.length; i++) {
+//             const location = crashData.locations[i];
+//             const crashDetail = crashData.details[i][0].CrashResultSet;
+//
+//             const query = `
+//                 INSERT INTO location (
+//                     lat,
+//                     lon,
+//                     state,
+//                     city,
+//                     route,
+//                     route_name,
+//                     county
+//                 ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+//                 ON CONFLICT (lat, lon) DO NOTHING
+//             `;
+//
+//             const values = [
+//                 parseFloat(location.latitude),
+//                 parseFloat(location.longitude),
+//                 crashDetail.STATENAME || null,
+//                 location.city || null,
+//                 parseInt(crashDetail.ROUTE) || null,
+//                 crashDetail.ROUTE_NAME || crashDetail.TWAY_ID || null,
+//                 crashDetail.COUNTYNAME || null
+//             ];
+//
+//             await db.query(query, values);
+//         }
+//
+//         await db.query('COMMIT');
+//     } catch (error) {
+//         await db.query('ROLLBACK');
+//         console.error('[FAIL] Error saving location data:', error);
+//         throw error;
+//     }
+// }
+// async function savePersonVehicle(victim_id,VIN, driving){
+//     const query = `
+//             INSERT INTO vehicle_victim (
+//                 victim_id,
+//                 VIN,
+//                 driving
+//             ) VALUES ($1, $2, $3)
+//             RETURNING victim_id
+//         `;
+//
+//     const values = [
+//         victim_id,
+//         VIN,
+//         driving
+//     ];
+//
+// }
+//
+//
+// async function savePersonData(VIN, passengernum){
+//
+//     for (let i = 0; i < passengernum; i++) {
+//         const query = `
+//             INSERT INTO victim (
+//                 first_name,
+//                 last_name,
+//                 date_of_birth,
+//                 sex,
+//                 health_insurance,
+//                 contact_inf,
+//                 ssn
+//             ) VALUES ($1, $2, $3, $4, $5,$6,$7)
+//             RETURNING victim_id
+//         `;
+//
+//         const result = await query(query, getVictim())
+//         const driving = (i === 0);
+//         savePersonVehicle(result.rows[0].victim_id,VIN, driving);
+//
+//     }
+//
+// }
+//
+// async function saveVehicleData(crashData) {
+//     try {
+//         await db.query('BEGIN');
+//
+//         for (let i = 0; i < crashData.details.length; i++) {
+//             const crashDetail = crashData.details[i][0].CrashResultSet;
+//
+//             for (let j = 0; j < crashDetail.Vehicles.length; j++) {
+//                 const vehicle = crashDetail.Vehicles[j];
+//
+//                 const query = `
+//                     INSERT INTO vehicle (
+//                         vin,
+//                         maker,
+//                         model,
+//                         type,
+//                         model_year
+//                     ) VALUES ($1, $2, $3, $4, $5)
+//                     ON CONFLICT (vin) DO NOTHING
+//                 `;
+//
+//                 const modelYear = crashDetail.MOD_YEAR ? (parseInt(crashDetail.MOD_YEAR) || null) : null;
+//
+//                 const values = [
+//                     vehicle.VIN,
+//                     vehicle.MAKENAME,
+//                     vehicle.MODELNAME,
+//                     vehicle.BODYSTYL_T,
+//                     modelYear
+//                 ];
+//
+//                 await db.query(query, values);
+//                 if (vehicle.Persons.length>0)
+//                     savePersonData(vehicle.VIN, vehicle.Persons.length);
+//             }
+//         }
+//
+//         await db.query('COMMIT');
+//     } catch (error) {
+//         await db.query('ROLLBACK');
+//         console.error('[FAIL] Error saving vehicle data:', error);
+//         throw error;
+//     }
+// }
