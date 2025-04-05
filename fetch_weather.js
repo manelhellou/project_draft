@@ -74,8 +74,6 @@ const fetchWeather = async (lat, lon) => {
                     timestamp: time, 
                     unixTimestamp: unixTimestamp, 
                     temperature: data.hourly.temperature_2m[index],
-                    humidity: data.hourly.relative_humidity_2m[index],
-                    dewPoint: data.hourly.dew_point_2m[index],
                     apparentTemperature: data.hourly.apparent_temperature[index],
                     precipitation: data.hourly.precipitation[index],
                     rain: data.hourly.rain[index],
@@ -112,12 +110,12 @@ const insertWeatherData = async (weatherData) => {
     try {
         const query = `
                     INSERT INTO weather (
-                        lat, long, time, unix_timestamp, weather_description, temperature, relative_humidity, dew_point, apparent_temperature, 
+                        lat, lon, time, unix_timestamp, weather_description, temperature, apparent_temperature, 
                         precipitation, rain, snowfall, snow_depth, cloud_cover, cloud_cover_low, cloud_cover_mid, 
                         cloud_cover_high, wind_speed_10m, wind_speed_100m, wind_direction_10m, wind_direction_100m, 
                         wind_gusts_10m
                     ) 
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
                 `;
 
         for (const record of weatherData) {
@@ -128,8 +126,6 @@ const insertWeatherData = async (weatherData) => {
                 record.unixTimestamp,
                 record.weatherDescription,  
                 record.temperature,
-                record.humidity,
-                record.dewPoint,
                 record.apparentTemperature,
                 record.precipitation,
                 record.rain,
@@ -176,24 +172,29 @@ async function main() {
     const carCrashFile = await import("./fetch_carCrash.mjs");
     const crashInfo = await carCrashFile.processAllCrashData();
 
-    //API has a maximum of calls per hour, so we will separate it in 2 
-    const half = Math.floor(crashInfo.locations.length / 2); 
+    // Separating the list of crashes into 4 parts to run this program 4 times (because too many API calls if we run everything all at once)
+    const locations = crashInfo.locations;
+    const total = locations.length;
+    const quarter = Math.floor(total / 4);
 
-    //Arguments to pass in command line
-    const processFirstHalf = process.argv.includes("--first");
-    const processSecondHalf = process.argv.includes("--second");
+    const args = process.argv;
+    let selectedLocations = [];
 
-    let locations;
-    if (processFirstHalf) {
-        locations = crashInfo.locations.slice(0, half);
-    } else if (processSecondHalf) {
-        locations = crashInfo.locations.slice(half);
+    if (args.includes("--first")) {
+        selectedLocations = locations.slice(0, quarter);
+    } else if (args.includes("--second")) {
+        selectedLocations = locations.slice(quarter, 2 * quarter);
+    } else if (args.includes("--third")) {
+        selectedLocations = locations.slice(2 * quarter, 3 * quarter);
+    } else if (args.includes("--fourth")) {
+        selectedLocations = locations.slice(3 * quarter);
     } else {
-        console.log("Please specify --first or --second");
+        console.log("Please specify one of: --first, --second, --third, or --fourth");
         return;
     }
 
-    fetchAndInsertWeatherData(locations);
+    await fetchAndInsertWeatherData(selectedLocations);
 }
+
 
 main();
