@@ -2,7 +2,7 @@ import pg from 'pg';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
-import {getVictim, getInjury} from './generator_function.js'
+import {getVictim, getInjury} from './generator_function.mjs'
 dotenv.config();
 
 const db = new pg.Client({
@@ -133,8 +133,9 @@ async function saveLocationData(crashData) {
                     city,
                     route,
                     route_name,
-                    county
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    county,
+                    county_num
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 ON CONFLICT (lat, lon) DO NOTHING
             `;
 
@@ -145,7 +146,8 @@ async function saveLocationData(crashData) {
                 location.city || null,
                 parseInt(crashDetail.ROUTE) || null,
                 crashDetail.ROUTE_NAME || crashDetail.TWAY_ID || null,
-                crashDetail.COUNTYNAME || null
+                crashDetail.COUNTYNAME || null,
+                crashDetail.COUNTY || null
             ];
 
             await db.query(query, values);

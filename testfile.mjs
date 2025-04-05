@@ -1,7 +1,10 @@
-require('dotenv').config();
-const axios = require('axios');
-const { Client } = require('pg');
-const fs = require('fs');
+import dotenv from 'dotenv';
+import axios from 'axios';
+import pg from 'pg';
+import fs from 'fs';
+const { Client } = pg;
+
+dotenv.config();
 
 // Database connection setup
 const db = new Client({

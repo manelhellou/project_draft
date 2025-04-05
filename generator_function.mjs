@@ -1,7 +1,6 @@
-
-const fs = require('fs');
-const path = require('path');
-const crypto = require('crypto');
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
 
 function getRandomNameByDate(date, sex) {
     try {
@@ -59,7 +58,7 @@ function getRandomDate() {
     const endDate = new Date(2025, 0, 1);   // Jan 1, 2025
     return new Date(startDate.getTime() + Math.random() * (endDate.getTime() - startDate.getTime()));
 }
-export function getInjury() {
+export function getInjury(){
     try {
         const filePath = path.join(__dirname, "/data/car_accident_injuries.txt");
         const fileContent = fs.readFileSync(filePath, 'utf8');

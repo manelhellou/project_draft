@@ -2,7 +2,7 @@ import pg from 'pg';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
-import {getVictim, getInjury, getRespondent} from './generator_function.js'
+import {getVictim, getInjury, getRespondent} from './generator_function.mjs'
 dotenv.config();
 
 const db = new pg.Client({
@@ -271,19 +271,21 @@ async function saveLocationData(crashData) {
                               city,
                               route,
                               route_name,
-                              county)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+                              county,
+                              county_name)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         ON CONFLICT (lat, lon) DO NOTHING
     `;
 
     const values = [
         parseFloat(crashData.LATITUDE),
-        parseFloat(crashData.LONGITUD),
+        parseFloat(crashData.LONGITUDE),
         crashData.STATENAME || null,
         crashData.CITYNAME || null,
         parseInt(crashData.ROUTE) || null,
         crashData.ROUTE_NAME || crashData.TWAY_ID || null,
-        crashData.COUNTYNAME || null
+        crashData.COUNTYNAME || null,
+        crashData.COUNTY || null
     ];
 
     await db.query(query, values);
@@ -316,8 +318,38 @@ async function saveAccidentData(crashData) {
                 parseInt(crashData.ST_CASE),
                 crashDate,
                 crashData.HARM_EVNAME || 'Unknown',
-                parseFloat(location.latitude),
-                parseFloat(location.longitude)
+                parseFloat(crashData.LATITUDE),
+                parseFloat(crashData.LONGITUDE).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
             ];
 
             saveLocationData(crashData);
@@ -355,3 +387,5 @@ async function getCrashDetails(crashList) {
         }
     }
 }
+
+processAllCrashData();
