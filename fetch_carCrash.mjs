@@ -85,13 +85,22 @@ async function getCrashDetails(crashList) {
                     city: crashData.CITYNAME
                 };
                 
-                await saveAccidentData({
+                const locationSaved = await saveLocationData({
                     location: location,
                     detail: crashData
                 });
                 
-                locationsArray.push(location);
-                detailsArray.push(crashData);
+                if (locationSaved) {
+                    await saveAccidentData({
+                        location: location,
+                        detail: crashData
+                    });
+
+                    locationsArray.push(location);
+                    detailsArray.push(crashData);
+                } else {
+                    console.log(`[SKIP] Skipping accident data for case ${crash.CaseNumber} due to location save failure`);
+                }
                 
             } catch (locationError) {
                 console.error(`[FAIL] Error extracting location data for case ${crash.CaseNumber}:`, locationError);
@@ -111,6 +120,49 @@ async function getCrashDetails(crashList) {
         locations: locationsArray,
         details: detailsArray
     };
+}
+
+
+async function saveLocationData(crashData) {
+    try {
+        await db.query('BEGIN');
+
+        const location = crashData.location;
+        const detail = crashData.detail;
+
+        const query = `
+            INSERT INTO location (
+                lat,
+                lon,
+                state,
+                city,
+                route,
+                route_name,
+                county,
+                county_num
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            ON CONFLICT (lat, lon) DO NOTHING
+        `;
+
+        const values = [
+            parseFloat(location.latitude),
+            parseFloat(location.longitude),
+            detail.STATENAME || null,
+            location.city || null,
+            parseInt(detail.ROUTE) || null,
+            detail.ROUTE_NAME || detail.TWAY_ID || null,
+            detail.COUNTYNAME || null,
+            parseInt(detail.COUNTY) || null
+        ];
+
+        await db.query(query, values);
+        await db.query('COMMIT');
+        return true;
+    } catch (error) {
+        await db.query('ROLLBACK');
+        console.error('[FAIL] Error saving location data:', error);
+        return false;
+    }
 }
 
 async function saveAccidentData(crashData) {
@@ -202,47 +254,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
 
 
-// async function saveLocationData(crashData) {
-//     try {
-//         await db.query('BEGIN');
-//
-//         for (let i = 0; i < crashData.locations.length; i++) {
-//             const location = crashData.locations[i];
-//             const crashDetail = crashData.details[i][0].CrashResultSet;
-//
-//             const query = `
-//                 INSERT INTO location (
-//                     lat,
-//                     lon,
-//                     state,
-//                     city,
-//                     route,
-//                     route_name,
-//                     county
-//                 ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-//                 ON CONFLICT (lat, lon) DO NOTHING
-//             `;
-//
-//             const values = [
-//                 parseFloat(location.latitude),
-//                 parseFloat(location.longitude),
-//                 crashDetail.STATENAME || null,
-//                 location.city || null,
-//                 parseInt(crashDetail.ROUTE) || null,
-//                 crashDetail.ROUTE_NAME || crashDetail.TWAY_ID || null,
-//                 crashDetail.COUNTYNAME || null
-//             ];
-//
-//             await db.query(query, values);
-//         }
-//
-//         await db.query('COMMIT');
-//     } catch (error) {
-//         await db.query('ROLLBACK');
-//         console.error('[FAIL] Error saving location data:', error);
-//         throw error;
-//     }
-// }
 // async function savePersonVehicle(victim_id,VIN, driving){
 //     const query = `
 //             INSERT INTO vehicle_victim (
