@@ -84,23 +84,19 @@ async function getCrashDetails(crashList) {
                     longitude: crashData.LONGITUD,
                     city: crashData.CITYNAME
                 };
-                
-                const locationSaved = await saveLocationData({
+
+                await saveLocationData({
                     location: location,
                     detail: crashData
                 });
                 
-                if (locationSaved) {
-                    await saveAccidentData({
-                        location: location,
-                        detail: crashData
-                    });
-
-                    locationsArray.push(location);
-                    detailsArray.push(crashData);
-                } else {
-                    console.log(`[SKIP] Skipping accident data for case ${crash.CaseNumber} due to location save failure`);
-                }
+                await saveAccidentData({
+                    location: location,
+                    detail: crashData
+                });
+                
+                locationsArray.push(location);
+                detailsArray.push(crashData);
                 
             } catch (locationError) {
                 console.error(`[FAIL] Error extracting location data for case ${crash.CaseNumber}:`, locationError);
@@ -157,11 +153,10 @@ async function saveLocationData(crashData) {
 
         await db.query(query, values);
         await db.query('COMMIT');
-        return true;
     } catch (error) {
         await db.query('ROLLBACK');
         console.error('[FAIL] Error saving location data:', error);
-        return false;
+        throw error;
     }
 }
 
