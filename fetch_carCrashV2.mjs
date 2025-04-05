@@ -100,7 +100,6 @@ async function savePersonVehicle(victim_id,VIN, driving){
                 VIN,
                 driving
             ) VALUES ($1, $2, $3)
-            RETURNING victim_id
         `;
 
     const values = [
@@ -130,7 +129,34 @@ async function saveVehicleAccident(VIN,accident_id){
 
 }
 
-async function savePersonData(VIN, passengernum){
+async function savePersonAccident(victim_id, accident_id) {
+    const query = `
+            INSERT INTO accident_victim (
+                victim_id,
+                accident_id,
+                injured,
+                injury_desc
+            ) VALUES ($1, $2, $3)
+            RETURNING victim_id
+        `;
+
+    if (Math.random()>0.8){
+        const values = [
+            victim_id,
+            accident_id,
+            false,
+            null
+        ];
+    }
+    const values = [
+        victim_id,
+        accident_id,
+        true,
+        getInjury()
+    ];
+}
+
+async function savePersonData(VIN, passengernum, accident_id){
 
     for (let i = 0; i < passengernum; i++) {
         const query = `
@@ -149,6 +175,7 @@ async function savePersonData(VIN, passengernum){
         const result = await db.query(query, getVictim());
         const driving = (i === 0);
         await savePersonVehicle(result.rows[0].victim_id,VIN, driving);
+        await savePersonAccident(result.rows[0].victim_id,accident_id);
 
     }
 
@@ -182,7 +209,8 @@ async function saveVehicleData(crashData, accident_id){
         await db.query(query, values);
         await saveVehicleAccident(vehicle.VIN, accident_id);
         if (vehicle.Persons.length>0)
-            savePersonData(vehicle.VIN, vehicle.Persons.length);
+            savePersonData(vehicle.VIN, vehicle.Persons.length, accident_id);
+
     }
 }
 
