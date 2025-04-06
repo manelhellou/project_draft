@@ -204,7 +204,7 @@ async function savePersonAccident(victim_id, accident_id) {
 
 }
 
-async function savePersonData(VIN, accident_id){
+async function savePersonData(){
         const query = `
             INSERT INTO victim (
                 first_name,
@@ -283,7 +283,27 @@ async function saveLocationData(crashData) {
 
     await db.query(query, values);
 }
-
+async function saveDetailData(crashData, accident_id) {
+    const query = `
+                INSERT INTO details (
+                    detail_id,  
+                    detail_information,
+                    light_condition,
+                    road_function,
+                    intersection_type,
+                    drunk_driving
+                ) VALUES ( $1, $2, $3, $4, $5, $6)
+                
+            `;
+    const values = [
+        accident_id,
+        crashData.HARM_EVNAME,
+        crashData.LGT_CONDNAME,
+        crashData.ROAD_FNCNAME,
+        crashData.TYP_INTNAME,
+        crashData.DRUNK_DR];
+    await db.query(query, values);
+}
 async function saveAccidentData(crashData) {
             const query = `
                 INSERT INTO accident (
@@ -336,14 +356,27 @@ async function getCrashDetails(crashList) {
             const detailData = await response.json();
             const crashData= detailData.Results[0][0].CrashResultSet;
 
-
+            console.log(crashData.ST_CASE);
             await saveLocationData(crashData);
             const accident_id = await saveAccidentData(crashData);
+            await saveDetailData(crashData, accident_id);
+
             const vehicles = await saveVehicleData(crashData, accident_id);
+
+            for (let i = 0; i < crashData.PEDS; i++) {
+                const victim_id = await savePersonData();
+                await savePersonAccident(victim_id,accident_id);
+
+                const respondent_id = await saveRespondentData(crashData.COUNTY);
+                await saveIntervention(victim_id,accident_id,respondent_id);            }
+
             for (let i = 0; i < vehicles.length; i++) {
+
                 await saveVehicleAccident(vehicles[i][0], accident_id);
+
                 for (let j = 0; j < vehicles[i][1] ; j++) {
-                    const victim_id = await savePersonData(vehicles[i][0], accident_id);
+
+                    const victim_id = await savePersonData();
                     await savePersonVehicle(victim_id,vehicles[i][0], (j===0));
                     await savePersonAccident(victim_id,accident_id);
 

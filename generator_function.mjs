@@ -28,7 +28,6 @@ function getRandomNameByDate(date, sex) {
 
         // Select a random name from the array
         const randomIndex = Math.floor(Math.random() * names.length);
-        console.log(names[randomIndex]);
         return names[randomIndex];
     } catch (error) {
         console.error(`Error: ${error.message}`);
