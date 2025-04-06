@@ -341,6 +341,8 @@ async function saveAccidentData(crashData) {
 }
 
 async function getCrashDetails(crashList) {
+    let successfulSaves = 0;
+    const totalCrashes = crashList.length;
 
     for (const crash of crashList) {
         const url = `https://crashviewer.nhtsa.dot.gov/CrashAPI/crashes/GetCaseDetails?stateCase=${crash.CaseNumber}&caseYear=${crash.CaseYear}&state=${crash.StateNumber}&format=json`;
@@ -356,7 +358,6 @@ async function getCrashDetails(crashList) {
             const detailData = await response.json();
             const crashData= detailData.Results[0][0].CrashResultSet;
 
-            console.log(crashData.ST_CASE);
             await saveLocationData(crashData);
             const accident_id = await saveAccidentData(crashData);
             await saveDetailData(crashData, accident_id);
@@ -368,14 +369,13 @@ async function getCrashDetails(crashList) {
                 await savePersonAccident(victim_id,accident_id);
 
                 const respondent_id = await saveRespondentData(crashData.COUNTY);
-                await saveIntervention(victim_id,accident_id,respondent_id);            }
+                await saveIntervention(victim_id,accident_id,respondent_id);
+            }
 
             for (let i = 0; i < vehicles.length; i++) {
-
                 await saveVehicleAccident(vehicles[i][0], accident_id);
 
                 for (let j = 0; j < vehicles[i][1] ; j++) {
-
                     const victim_id = await savePersonData();
                     await savePersonVehicle(victim_id,vehicles[i][0], (j===0));
                     await savePersonAccident(victim_id,accident_id);
@@ -383,19 +383,25 @@ async function getCrashDetails(crashList) {
                     const respondent_id = await saveRespondentData(crashData.COUNTY);
                     await saveIntervention(victim_id,accident_id,respondent_id);
                 }
-
             }
 
-
-
-
             await db.query('COMMIT');
+            successfulSaves++;
+            
+            // Display progress after every 10 successful saves
+            if (successfulSaves % 10 === 0) {
+                console.log(`[PROGRESS] Successfully processed ${successfulSaves}/${totalCrashes} crashes (${Math.round(successfulSaves/totalCrashes*100)}%)`);
+            }
+
         } catch (error) {
             await db.query('ROLLBACK');
             console.error('[FAIL] Error saving accident data:', error);
             throw error;
         }
     }
+    
+    // Final progress report
+    console.log(`\n[COMPLETE] Successfully processed ${successfulSaves}/${totalCrashes} crashes (${Math.round(successfulSaves/totalCrashes*100)}%)`);
 }
 
 processAllCrashData();
