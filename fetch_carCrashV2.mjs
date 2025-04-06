@@ -23,7 +23,7 @@ const db = new pg.Client({
 await db.connect();
 
 async function getCrashList() {
-    const url = "https://crashviewer.nhtsa.dot.gov/CrashAPI/crashes/GetCaseList?states=1,51&fromYear=2014&toYear=2015&minNumOfVehicles=1&maxNumOfVehicles=6&format=json";
+    const url = "https://crashviewer.nhtsa.dot.gov/CrashAPI/crashes/GetCaseList?states=1&fromYear=2010&toYear=2010&minNumOfVehicles=1&maxNumOfVehicles=6&format=json";
 
     try {
         const response = await fetch(url);
@@ -301,7 +301,7 @@ async function saveDetailData(crashData, accident_id) {
         crashData.LGT_CONDNAME,
         crashData.ROAD_FNCNAME,
         crashData.TYP_INTNAME,
-        crashData.DRUNK_DR];
+        (crashData.DRUNK_DR>0)];
     await db.query(query, values);
 }
 async function saveAccidentData(crashData) {
