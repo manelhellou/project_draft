@@ -352,7 +352,7 @@ async function saveAccidentData(crashData) {
                 crashDate,
                 crashData.HARM_EVNAME || 'Unknown',
                 parseFloat(crashData.LATITUDE),
-                parseFloat(crashData.LONGITUDE)
+                parseFloat(crashData.LONGITUD)
             ];
 
 
