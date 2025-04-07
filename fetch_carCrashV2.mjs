@@ -23,7 +23,7 @@ const db = new pg.Client({
 await db.connect();
 
 async function getCrashList() {
-    const url = "https://crashviewer.nhtsa.dot.gov/CrashAPI/crashes/GetCaseList?states=1&fromYear=2010&toYear=2010&minNumOfVehicles=1&maxNumOfVehicles=6&format=json";
+    const url = "https://crashviewer.nhtsa.dot.gov/CrashAPI/crashes/GetCaseList?states=4,5,6,7&fromYear=2010&toYear=2010&minNumOfVehicles=1&maxNumOfVehicles=6&format=json";
 
     try {
         const response = await fetch(url);
@@ -120,7 +120,7 @@ async function saveVehicleAccident(VIN,accident_id){
                 accident_id,
                 VIN
             ) VALUES ($1, $2)
-            
+            ON CONFLICT DO NOTHING 
         `;
 
     const values = [
@@ -268,11 +268,13 @@ async function saveLocationData(crashData) {
                               county_num)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         ON CONFLICT (lat, lon) DO NOTHING
+        RETURNING county_num
     `;
+
 
     const values = [
         parseFloat(crashData.LATITUDE),
-        parseFloat(crashData.LONGITUDE),
+        parseFloat(crashData.LONGITUD),
         crashData.STATENAME || null,
         crashData.CITYNAME || null,
         parseInt(crashData.ROUTE) || null,
@@ -281,7 +283,25 @@ async function saveLocationData(crashData) {
         crashData.COUNTY || null
     ];
 
-    await db.query(query, values);
+    try {
+        const result = await db.query(query, values);
+
+        if (result.rows[0]) {
+            return result.rows[0].county_num;
+        } else {
+            const selectQuery = `
+        SELECT county_num FROM location WHERE lat = $1 AND lon = $2
+      `;
+            const result = await db.query(selectQuery, values.slice(0, 2));
+
+            return result.rows[0]?.county_num || null;
+        }
+    } catch (err) {
+        console.error('Database error:', err);
+        throw err;
+    }
+
+    return result.rows[0].county_num;
 }
 async function saveDetailData(crashData, accident_id) {
     const query = `
@@ -345,6 +365,9 @@ async function getCrashDetails(crashList) {
     const totalCrashes = crashList.length;
 
     for (const crash of crashList) {
+        if(!crash.CaseNumber||!crash.CaseYear||!crash.StateNumber){
+            continue;
+        }
         const url = `https://crashviewer.nhtsa.dot.gov/CrashAPI/crashes/GetCaseDetails?stateCase=${crash.CaseNumber}&caseYear=${crash.CaseYear}&state=${crash.StateNumber}&format=json`;
 
         await db.query('BEGIN');
@@ -354,11 +377,10 @@ async function getCrashDetails(crashList) {
             if (!response.ok) {
                 throw new Error(`HTTP error! Status: ${response.status}`);
             }
-
             const detailData = await response.json();
             const crashData= detailData.Results[0][0].CrashResultSet;
 
-            await saveLocationData(crashData);
+            const county = await saveLocationData(crashData);
             const accident_id = await saveAccidentData(crashData);
             await saveDetailData(crashData, accident_id);
 
@@ -368,7 +390,7 @@ async function getCrashDetails(crashList) {
                 const victim_id = await savePersonData();
                 await savePersonAccident(victim_id,accident_id);
 
-                const respondent_id = await saveRespondentData(crashData.COUNTY);
+                const respondent_id = await saveRespondentData(county);
                 await saveIntervention(victim_id,accident_id,respondent_id);
             }
 
@@ -380,7 +402,7 @@ async function getCrashDetails(crashList) {
                     await savePersonVehicle(victim_id,vehicles[i][0], (j===0));
                     await savePersonAccident(victim_id,accident_id);
 
-                    const respondent_id = await saveRespondentData(crashData.COUNTY);
+                    const respondent_id = await saveRespondentData(county);
                     await saveIntervention(victim_id,accident_id,respondent_id);
                 }
             }
