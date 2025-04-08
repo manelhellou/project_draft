@@ -1,12 +1,8 @@
 import pg from 'pg';
 import dotenv from 'dotenv';
-import fs from 'fs';
-import path from 'path';
 import {getVictim, getInjury, getRespondent} from './generator_function.mjs'
 dotenv.config();
-import { dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-const dir = dirname(fileURLToPath(import.meta.url));
+
 
 const db = new pg.Client({
     user: process.env.DB_USER,
@@ -14,16 +10,16 @@ const db = new pg.Client({
     host: process.env.DB_HOST,
     port: process.env.DB_PORT,
     database: process.env.DB_NAME,
-    ssl: {
-        rejectUnauthorized: true,
-        ca: fs.readFileSync(path.join(process.cwd(), 'us-east-2-bundle.pem')).toString()
-    }
+    // ssl: {
+    //     rejectUnauthorized: true,
+    //     ca: fs.readFileSync(path.join(process.cwd(), 'us-east-2-bundle.pem')).toString()
+    // }
 });
 
 await db.connect();
 
 async function getCrashList() {
-    const url = "https://crashviewer.nhtsa.dot.gov/CrashAPI/crashes/GetCaseList?states=4,5,6,7&fromYear=2010&toYear=2010&minNumOfVehicles=1&maxNumOfVehicles=6&format=json";
+    const url = "https://crashviewer.nhtsa.dot.gov/CrashAPI/crashes/GetCaseList?states=15,16,17,18&fromYear=2010&toYear=2010&minNumOfVehicles=1&maxNumOfVehicles=6&format=json";
 
     try {
         const response = await fetch(url);
@@ -355,7 +351,6 @@ async function saveAccidentData(crashData) {
                 parseFloat(crashData.LONGITUD)
             ];
 
-
             const result = await db.query(query, values);
             return result.rows[0].accident_id;
 }
@@ -368,9 +363,10 @@ async function getCrashDetails(crashList) {
         if(!crash.CaseNumber||!crash.CaseYear||!crash.StateNumber){
             continue;
         }
-        const url = `https://crashviewer.nhtsa.dot.gov/CrashAPI/crashes/GetCaseDetails?stateCase=${crash.CaseNumber}&caseYear=${crash.CaseYear}&state=${crash.StateNumber}&format=json`;
 
-        await db.query('BEGIN');
+        const url = `https://crashviewer.nhtsa.dot.gov/CrashAPI/crashes/GetCaseDetails?stateCase=${crash.CaseNumber}&caseYear=${crash.CaseYear}&state=${crash.StateNumber}&format=json`;
+        if (successfulSaves%10===0)
+            await db.query('BEGIN');
         try {
             const response = await fetch(url);
 
@@ -381,17 +377,20 @@ async function getCrashDetails(crashList) {
             const crashData= detailData.Results[0][0].CrashResultSet;
 
             const county = await saveLocationData(crashData);
+
             const accident_id = await saveAccidentData(crashData);
-            await saveDetailData(crashData, accident_id);
+
+
+            saveDetailData(crashData, accident_id);
 
             const vehicles = await saveVehicleData(crashData, accident_id);
 
             for (let i = 0; i < crashData.PEDS; i++) {
                 const victim_id = await savePersonData();
-                await savePersonAccident(victim_id,accident_id);
+                savePersonAccident(victim_id,accident_id);
 
                 const respondent_id = await saveRespondentData(county);
-                await saveIntervention(victim_id,accident_id,respondent_id);
+                saveIntervention(victim_id,accident_id,respondent_id);
             }
 
             for (let i = 0; i < vehicles.length; i++) {
@@ -406,8 +405,9 @@ async function getCrashDetails(crashList) {
                     await saveIntervention(victim_id,accident_id,respondent_id);
                 }
             }
+            if (successfulSaves%10===9)
+                await db.query('COMMIT');
 
-            await db.query('COMMIT');
             successfulSaves++;
             
             // Display progress after every 10 successful saves
@@ -420,6 +420,8 @@ async function getCrashDetails(crashList) {
             console.error('[FAIL] Error saving accident data:', error);
             throw error;
         }
+
+
     }
     
     // Final progress report
