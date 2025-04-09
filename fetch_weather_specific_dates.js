@@ -80,8 +80,6 @@ const fetchWeather = async (lat, lon, url) => {
                     timestamp: time, 
                     unixTimestamp: unixTimestamp, 
                     temperature: data.hourly.temperature_2m[index],
-                    humidity: data.hourly.relative_humidity_2m[index],
-                    dewPoint: data.hourly.dew_point_2m[index],
                     apparentTemperature: data.hourly.apparent_temperature[index],
                     precipitation: data.hourly.precipitation[index],
                     rain: data.hourly.rain[index],
@@ -165,7 +163,7 @@ const insertWeatherData = async (weatherData) => {
 const fetchAndInsertWeatherData = async (locations) => {
     for (const location of locations) {
         const { latitude: lat, longitude: lon, date: date } = location;
-        const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${date}&end_date=${date}&hourly=temperature_2m,relative_humidity_2m,dew_point_2m,apparent_temperature,precipitation,rain,snowfall,snow_depth,weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m,wind_speed_100m,wind_direction_10m,wind_direction_100m,wind_gusts_10m`;
+        const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${date}&end_date=${date}&hourly=temperature_2m,apparent_temperature,precipitation,rain,snowfall,snow_depth,weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,wind_speed_10m,wind_speed_100m,wind_direction_10m,wind_direction_100m,wind_gusts_10m`;
         
         // Fetch weather data for the entire available range (from API)
         const weatherData = await fetchWeather(lat, lon, url);
@@ -192,9 +190,19 @@ async function main() {
 // Fetch all accident locations from the database
 const getAccidentLocations = async () => {
     try {
-        const res = await db.query('SELECT lat, lon, time FROM accident');
+        const res = await db.query(`
+            SELECT a.lat, a.lon, a.time
+            FROM accident a
+            WHERE NOT EXISTS (
+                SELECT 1 FROM weather w
+                WHERE w.lat = a.lat
+                  AND w.lon = a.lon
+                  AND w.time = a.time
+            )
+        `);
+
         return res.rows.map(row => {
-            const date = new Date(row.time).toISOString().split('T')[0]; // format as 'YYYY-MM-DD'
+            const date = new Date(row.time).toISOString().split('T')[0]; // 'YYYY-MM-DD'
             return {
                 latitude: row.lat,
                 longitude: row.lon,
@@ -206,6 +214,7 @@ const getAccidentLocations = async () => {
         return [];
     }
 };
+
 
 async function main() {
     const locations = await getAccidentLocations();
