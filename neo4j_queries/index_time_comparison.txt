@@ -1,0 +1,33 @@
+Before:
+
+    Aggregation:
+        Cypher version: 5, planner: COST, runtime: SLOTTED. 120981 total db hits in 48 ms.
+
+    BasicSearch:
+        Cypher version: 5, planner: COST, runtime: SLOTTED. 180277 total db hits in 216 ms.
+
+    SimulationGroupBy:
+        Cypher version: 5, planner: COST, runtime: SLOTTED. 120981 total db hits in 195 ms.
+
+    TopNEntities:
+        Cypher version: 5, planner: COST, runtime: SLOTTED. 127044 total db hits in 64 ms.
+
+    TextSearch:
+        Cypher version: 5, planner: COST, runtime: SLOTTED. 304297 total db hits in 357 ms.
+
+After:
+
+    Aggregation:
+        Cypher version: 5, planner: COST, runtime: SLOTTED. 6054 total db hits in 28 ms.
+
+    BasicSearch:
+        Cypher version: 5, planner: COST, runtime: SLOTTED. 88945 total db hits in 126 ms.
+
+    SimulationGroupBy:
+        Cypher version: 5, planner: COST, runtime: SLOTTED. 120981 total db hits in 40 ms.
+
+    TopNEntities:
+        Cypher version: 5, planner: COST, runtime: SLOTTED. 12117 total db hits in 28 ms.
+
+    TextSearch:
+
